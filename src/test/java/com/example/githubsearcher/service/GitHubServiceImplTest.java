@@ -23,6 +23,7 @@ import com.example.githubsearcher.exception.ResourceNotFoundException;
 import com.example.githubsearcher.mapper.RepositoryMapper;
 import com.example.githubsearcher.model.SortField;
 import com.example.githubsearcher.repository.GitHubRepository;
+import com.example.githubsearcher.repository.UpsertCommand;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -64,19 +65,17 @@ class GitHubServiceImplTest {
         assertThat(response.message()).isEqualTo("Repositories fetched and saved successfully");
         assertThat(response.repositories()).hasSize(1);
         assertThat(response.repositories().get(0).id()).isEqualTo(123456L);
-        verify(gitHubRepository).upsert(
-                eq(123456L),
-                eq("spring-boot-example"),
-                eq("user123/spring-boot-example"),
-                eq("An example repository for Spring Boot"),
-                eq("user123"),
-                eq("Java"),
-                eq(450L),
-                eq(120L),
-                eq(OffsetDateTime.parse("2024-01-01T12:00:00Z")),
-                eq("https://github.com/user123/spring-boot-example"),
-                any(OffsetDateTime.class),
-                any(OffsetDateTime.class));
+        UpsertCommand saved = captureSingleUpsert();
+        assertThat(saved.githubId()).isEqualTo(123456L);
+        assertThat(saved.name()).isEqualTo("spring-boot-example");
+        assertThat(saved.fullName()).isEqualTo("user123/spring-boot-example");
+        assertThat(saved.description()).isEqualTo("An example repository for Spring Boot");
+        assertThat(saved.owner()).isEqualTo("user123");
+        assertThat(saved.language()).isEqualTo("Java");
+        assertThat(saved.stars()).isEqualTo(450L);
+        assertThat(saved.forks()).isEqualTo(120L);
+        assertThat(saved.lastUpdated()).isEqualTo(OffsetDateTime.parse("2024-01-01T12:00:00Z"));
+        assertThat(saved.htmlUrl()).isEqualTo("https://github.com/user123/spring-boot-example");
         verify(gitHubRepository, never()).save(any());
     }
 
@@ -86,8 +85,9 @@ class GitHubServiceImplTest {
 
         service.search(new SearchRequest("spring", null, null));
 
-        verify(gitHubRepository, times(1)).upsert(
-                eq(7L), any(), any(), any(), any(), any(), eq(10L), any(), any(), any(), any(), any());
+        UpsertCommand saved = captureSingleUpsert();
+        assertThat(saved.githubId()).isEqualTo(7L);
+        assertThat(saved.stars()).isEqualTo(10L);
         verify(gitHubRepository, never()).save(any());
     }
 
@@ -104,7 +104,11 @@ class GitHubServiceImplTest {
         assertThat(response.repositories()).hasSize(1);
         assertThat(response.repositories().get(0).name()).isEqualTo("renamed");
         assertThat(response.repositories().get(0).stars()).isEqualTo(99L);
-        verify(gitHubRepository, times(1)).upsert(eq(42L), eq("renamed"), any(), any(), any(), any(), eq(99L), eq(3L), any(), any(), any(), any());
+        UpsertCommand saved = captureSingleUpsert();
+        assertThat(saved.githubId()).isEqualTo(42L);
+        assertThat(saved.name()).isEqualTo("renamed");
+        assertThat(saved.stars()).isEqualTo(99L);
+        assertThat(saved.forks()).isEqualTo(3L);
     }
 
     @Test
@@ -115,7 +119,7 @@ class GitHubServiceImplTest {
 
         assertThat(response.message()).isEqualTo("No repositories found for the given search criteria");
         assertThat(response.repositories()).isEmpty();
-        verify(gitHubRepository, never()).upsert(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(gitHubRepository, never()).upsertAll(any());
     }
 
     @Test
@@ -129,7 +133,13 @@ class GitHubServiceImplTest {
         assertThat(response.repositories().get(0).stars()).isZero();
         assertThat(response.repositories().get(0).forks()).isZero();
         assertThat(response.repositories().get(0).owner()).isNull();
-        verify(gitHubRepository).upsert(eq(5L), eq("bare"), isNull(), isNull(), isNull(), isNull(), eq(0L), eq(0L), isNull(), isNull(), any(), any());
+        UpsertCommand saved = captureSingleUpsert();
+        assertThat(saved.githubId()).isEqualTo(5L);
+        assertThat(saved.name()).isEqualTo("bare");
+        assertThat(saved.fullName()).isNull();
+        assertThat(saved.owner()).isNull();
+        assertThat(saved.stars()).isZero();
+        assertThat(saved.forks()).isZero();
     }
 
     @Test
@@ -139,7 +149,7 @@ class GitHubServiceImplTest {
         assertThatThrownBy(() -> service.search(new SearchRequest("spring", null, null)))
                 .isInstanceOf(GitHubApiException.class)
                 .hasMessage("down");
-        verify(gitHubRepository, never()).upsert(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(gitHubRepository, never()).upsertAll(any());
     }
 
     @Test
@@ -161,7 +171,7 @@ class GitHubServiceImplTest {
         when(gitHubRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity), PageRequest.of(0, 20), 1));
 
-        RepositoryListResponse response = service.findRepositories(" Java ", 10L, "forks", 0, 20);
+        RepositoryListResponse response = service.findRepositories(" Java ", 10L, null, null, null, "forks", 0, 20);
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
         verify(gitHubRepository).findAll(any(Specification.class), pageable.capture());
@@ -178,7 +188,7 @@ class GitHubServiceImplTest {
         when(gitHubRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        service.findRepositories(null, null, null, 0, 20);
+        service.findRepositories(null, null, null, null, null, null, 0, 20);
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
         verify(gitHubRepository).findAll(any(Specification.class), pageable.capture());
@@ -187,13 +197,13 @@ class GitHubServiceImplTest {
 
     @Test
     void negativeMinStarsRejected() {
-        assertThatThrownBy(() -> service.findRepositories(null, -1L, "stars", 0, 20))
+        assertThatThrownBy(() -> service.findRepositories(null, -1L, null, null, null, "stars", 0, 20))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
     @Test
     void unknownSortRejected() {
-        assertThatThrownBy(() -> service.findRepositories(null, null, "name", 0, 20))
+        assertThatThrownBy(() -> service.findRepositories(null, null, null, null, null, "name", 0, 20))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
@@ -202,6 +212,14 @@ class GitHubServiceImplTest {
         when(gitHubRepository.findByGithubId(9L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getByGithubId(9L)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    private UpsertCommand captureSingleUpsert() {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<UpsertCommand>> captor = ArgumentCaptor.forClass(List.class);
+        verify(gitHubRepository, times(1)).upsertAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(1);
+        return captor.getValue().get(0);
     }
 
     private static GitHubApiResponse.Item item(long id, long stars) {

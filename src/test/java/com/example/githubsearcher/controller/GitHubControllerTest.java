@@ -1,6 +1,7 @@
 package com.example.githubsearcher.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
@@ -93,7 +94,7 @@ class GitHubControllerTest {
 
     @Test
     void vercelOriginIsAllowed() throws Exception {
-        when(gitHubService.findRepositories(isNull(), isNull(), isNull(), eq(0), eq(20)))
+        when(gitHubService.findRepositories(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), eq(0), eq(20)))
                 .thenReturn(new RepositoryListResponse(List.of(), 0, 20, 0, 0));
 
         String origin = "https://github-repository-searcher-frontend.vercel.app";
@@ -110,7 +111,7 @@ class GitHubControllerTest {
 
     @Test
     void retrieveRepositories() throws Exception {
-        when(gitHubService.findRepositories(isNull(), isNull(), isNull(), eq(0), eq(20)))
+        when(gitHubService.findRepositories(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), eq(0), eq(20)))
                 .thenReturn(new RepositoryListResponse(List.of(sample(123456L)), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/github/repositories"))
@@ -123,7 +124,7 @@ class GitHubControllerTest {
 
     @Test
     void retrieveAppliesLanguageMinStarsAndSort() throws Exception {
-        when(gitHubService.findRepositories("Java", 100L, "forks", 0, 20))
+        when(gitHubService.findRepositories("Java", 100L, null, null, null, "forks", 0, 20))
                 .thenReturn(new RepositoryListResponse(List.of(sample(123456L)), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/github/repositories")
@@ -133,7 +134,7 @@ class GitHubControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.repositories[0].stars").value(450));
 
-        verify(gitHubService).findRepositories("Java", 100L, "forks", 0, 20);
+        verify(gitHubService).findRepositories("Java", 100L, null, null, null, "forks", 0, 20);
     }
 
     @Test
@@ -142,7 +143,7 @@ class GitHubControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
 
-        verify(gitHubService, never()).findRepositories(any(), any(), any(), eq(0), eq(20));
+        verify(gitHubService, never()).findRepositories(any(), any(), any(), any(), any(), any(), anyInt(), anyInt());
     }
 
     @Test
@@ -151,7 +152,7 @@ class GitHubControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Validation failed"));
 
-        verify(gitHubService, never()).findRepositories(any(), any(), any(), eq(0), eq(20));
+        verify(gitHubService, never()).findRepositories(any(), any(), any(), any(), any(), any(), anyInt(), anyInt());
     }
 
     @Test

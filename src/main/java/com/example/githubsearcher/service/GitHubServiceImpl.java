@@ -13,6 +13,7 @@ import com.example.githubsearcher.mapper.RepositoryMapper;
 import com.example.githubsearcher.model.SortField;
 import com.example.githubsearcher.repository.GitHubRepository;
 import com.example.githubsearcher.repository.RepositorySpecifications;
+import com.example.githubsearcher.repository.UpsertCommand;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -69,9 +70,10 @@ public class GitHubServiceImpl implements GitHubService {
         }
 
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        List<UpsertCommand> commands = new ArrayList<>();
         List<RepositoryResponse> responses = new ArrayList<>();
         for (GitHubApiResponse.Item item : unique.values()) {
-            gitHubRepository.upsert(
+            commands.add(new UpsertCommand(
                     item.id(),
                     item.name(),
                     item.fullName(),
@@ -83,8 +85,11 @@ public class GitHubServiceImpl implements GitHubService {
                     item.updatedAt(),
                     item.htmlUrl(),
                     now,
-                    now);
+                    now));
             responses.add(repositoryMapper.toResponse(item));
+        }
+        if (!commands.isEmpty()) {
+            gitHubRepository.upsertAll(commands);
         }
 
         if (responses.isEmpty()) {
@@ -95,9 +100,23 @@ public class GitHubServiceImpl implements GitHubService {
 
     @Override
     @Transactional(readOnly = true)
-    public RepositoryListResponse findRepositories(String language, Long minStars, String sort, int page, int size) {
+    public RepositoryListResponse findRepositories(
+            String language,
+            Long minStars,
+            Long minForks,
+            OffsetDateTime updatedFrom,
+            OffsetDateTime updatedToExclusive,
+            String sort,
+            int page,
+            int size) {
         if (minStars != null && minStars < 0) {
             throw new InvalidRequestException("minStars must be greater than or equal to 0");
+        }
+        if (minForks != null && minForks < 0) {
+            throw new InvalidRequestException("minForks must be greater than or equal to 0");
+        }
+        if (updatedFrom != null && updatedToExclusive != null && !updatedFrom.isBefore(updatedToExclusive)) {
+            throw new InvalidRequestException("updatedFrom must be on or before updatedTo");
         }
         if (page < 0) {
             throw new InvalidRequestException("page must be greater than or equal to 0");
@@ -108,7 +127,8 @@ public class GitHubServiceImpl implements GitHubService {
         SortField sortField = SortField.parseOrDefaultStars(sort);
         Pageable pageable = PageRequest.of(page, size, sortField.toSort());
         Page<RepositoryEntity> result = gitHubRepository.findAll(
-                RepositorySpecifications.matching(blankToNull(language), minStars),
+                RepositorySpecifications.matching(
+                        blankToNull(language), minStars, minForks, updatedFrom, updatedToExclusive),
                 pageable);
         List<RepositoryResponse> repositories = result.getContent().stream()
                 .map(repositoryMapper::toResponse)

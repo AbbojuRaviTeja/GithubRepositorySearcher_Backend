@@ -18,6 +18,10 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -73,6 +77,12 @@ public class GitHubController {
             @RequestParam(required = false) @Size(max = 64) String language,
             @Parameter(description = "Minimum star count, inclusive")
             @RequestParam(required = false) @Min(value = 0, message = "minStars must be greater than or equal to 0") Long minStars,
+            @Parameter(description = "Minimum fork count, inclusive")
+            @RequestParam(required = false) @Min(value = 0, message = "minForks must be greater than or equal to 0") Long minForks,
+            @Parameter(description = "Include repositories updated on or after this date (UTC)")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate updatedFrom,
+            @Parameter(description = "Include repositories updated on or before this date (UTC)")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate updatedTo,
             @Parameter(description = "stars, forks, or updated. Defaults to stars descending")
             @RequestParam(required = false)
             @Pattern(regexp = "(?i)stars|forks|updated", message = "sort must be one of: stars, forks, updated") String sort,
@@ -82,7 +92,23 @@ public class GitHubController {
             @RequestParam(defaultValue = "20")
             @Min(value = 1, message = "size must be at least 1")
             @Max(value = 100, message = "size must be at most 100") int size) {
-        return gitHubService.findRepositories(language, minStars, sort, page, size);
+        return gitHubService.findRepositories(
+                language,
+                minStars,
+                minForks,
+                startOfDay(updatedFrom),
+                startOfNextDay(updatedTo),
+                sort,
+                page,
+                size);
+    }
+
+    private static OffsetDateTime startOfDay(LocalDate date) {
+        return date == null ? null : date.atStartOfDay().atOffset(ZoneOffset.UTC);
+    }
+
+    private static OffsetDateTime startOfNextDay(LocalDate date) {
+        return date == null ? null : date.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
     }
 
     @GetMapping(value = "/repositories/{githubId}", produces = MediaType.APPLICATION_JSON_VALUE)
