@@ -44,6 +44,10 @@ github:
     max-pages: ${GITHUB_MAX_PAGES:1}
     fetch-all-pages: ${GITHUB_FETCH_ALL_PAGES:false}
 
+app:
+  cors:
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,https://*.vercel.app}
+
 springdoc:
   api-docs:
     path: /v3/api-docs

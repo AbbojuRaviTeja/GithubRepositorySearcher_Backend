@@ -7,11 +7,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.githubsearcher.config.WebConfig;
 import com.example.githubsearcher.dto.request.SearchRequest;
 import com.example.githubsearcher.dto.response.RepositoryListResponse;
 import com.example.githubsearcher.dto.response.RepositoryResponse;
@@ -25,12 +27,14 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(GitHubController.class)
+@Import(WebConfig.class)
 class GitHubControllerTest {
 
     @Autowired
@@ -85,6 +89,23 @@ class GitHubControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("sort"));
+    }
+
+    @Test
+    void vercelOriginIsAllowed() throws Exception {
+        when(gitHubService.findRepositories(isNull(), isNull(), isNull(), eq(0), eq(20)))
+                .thenReturn(new RepositoryListResponse(List.of(), 0, 20, 0, 0));
+
+        String origin = "https://github-repository-searcher-frontend.vercel.app";
+        mockMvc.perform(options("/api/github/repositories")
+                        .header("Origin", origin)
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", origin));
+
+        mockMvc.perform(get("/api/github/repositories").header("Origin", origin))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", origin));
     }
 
     @Test
