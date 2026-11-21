@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -33,6 +34,7 @@ public class GitHubApiClientImpl implements GitHubApiClient {
     private final int maxPages;
     private final boolean fetchAllPages;
 
+    @Autowired
     public GitHubApiClientImpl(RestClient githubRestClient, GitHubApiProperties properties) {
         this(githubRestClient, properties.getPerPage(), properties.getMaxPages(), properties.isFetchAllPages());
     }
